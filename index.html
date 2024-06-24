@@ -59,10 +59,9 @@
             y: 100,
             radius: 15,
             color: 'red',
-            speed: 0.1,
-            maxSpeed: 0.8,
-            dx: 1,
-            dy: 1
+            speed: 0.375,  // Reduced by 25%
+            maxSpeed: 0.9,  // Reduced by 25%
+            bounceDistance: 20  // Distance to bounce when hitting an obstacle
         };
 
         const oxygenTanks = [];
@@ -125,7 +124,7 @@
             dave.y = 200;
             hal.x = 100;
             hal.y = 100;
-            hal.speed = 0.1;
+            hal.speed = 0.375;
             oxygenTanks.length = 0;
             randomizeAirlockPosition();
             backgroundMusic.play();
@@ -191,25 +190,39 @@
         }
 
         function moveHal() {
-            hal.x += hal.speed * hal.dx;
-            hal.y += hal.speed * hal.dy;
+            const dx = dave.x - hal.x;
+            const dy = dave.y - hal.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
 
-            // Bounce off walls
-            if (hal.x - hal.radius < 0 || hal.x + hal.radius > canvas.width) hal.dx *= -1;
-            if (hal.y - hal.radius < 0 || hal.y + hal.radius > canvas.height) hal.dy *= -1;
+            let newX = hal.x;
+            let newY = hal.y;
 
-            // Bounce off oxygen tanks
+            if (distance > 0) {
+                newX += (dx / distance) * hal.speed;
+                newY += (dy / distance) * hal.speed;
+            }
+
+            // Check for collisions with oxygen tanks
+            let collision = false;
             for (let tank of oxygenTanks) {
-                if (checkCollision({x: hal.x - hal.radius, y: hal.y - hal.radius, width: hal.radius * 2, height: hal.radius * 2}, tank)) {
-                    // Determine which side HAL hit and reverse the appropriate direction
-                    if (Math.abs((hal.x - tank.x) / tank.width) > Math.abs((hal.y - tank.y) / tank.height)) {
-                        hal.dx *= -1;
-                    } else {
-                        hal.dy *= -1;
-                    }
+                if (checkCollision({x: newX - hal.radius, y: newY - hal.radius, width: hal.radius * 2, height: hal.radius * 2}, tank)) {
+                    collision = true;
                     break;
                 }
             }
+
+            if (collision) {
+                // Bounce HAL away from the obstacle
+                hal.x -= (dx / distance) * hal.bounceDistance;
+                hal.y -= (dy / distance) * hal.bounceDistance;
+            } else {
+                hal.x = newX;
+                hal.y = newY;
+            }
+
+            // Keep HAL within canvas bounds
+            hal.x = Math.max(hal.radius, Math.min(canvas.width - hal.radius, hal.x));
+            hal.y = Math.max(hal.radius, Math.min(canvas.height - hal.radius, hal.y));
         }
 
         function update() {
