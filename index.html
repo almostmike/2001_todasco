@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>2001: A Space Parody</title>
+    <style>
+        canvas {
+            border: 1px solid black;
+            display: block;
+            margin: 0 auto;
+        }
+        #startButton {
+            position: absolute;
+            left: 50%;
+            top: 70%;
+            transform: translate(-50%, -50%);
+            padding: 10px 20px;
+            font-size: 20px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas" width="400" height="400"></canvas>
+    <button id="startButton" style="display: none;">Start Game</button>
+    <audio id="backgroundMusic" loop>
+        <source src="2001.mp3" type="audio/mpeg">
+        Your browser does not support the audio element.
+    </audio>
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const startButton = document.getElementById('startButton');
+        const backgroundMusic = document.getElementById('backgroundMusic');
+
+        let gameState = 'splash';  // 'splash', 'playing', 'gameOver'
+        let oxygenLevel = 3000;
+
+        // Create starfield
+        const stars = Array(100).fill().map(() => ({
+            x: Math.random() * canvas.width,
+            y: Math.random() * canvas.height,
+            radius: Math.random() * 1.5,
+            alpha: Math.random()
+        }));
+
+        const dave = {
+            x: 200,
+            y: 200,
+            width: 20,
+            height: 30,
+            color: 'white',
+            speed: 3
+        };
+
+        const hal = {
+            x: 100,
+            y: 100,
+            radius: 15,
+            color: 'red',
+            speed: 0.1,
+            maxSpeed: 0.8,
+            dx: 1,
+            dy: 1
+        };
+
+        const oxygenTanks = [];
+        let score = 0;
+        let gameOver = false;
+
+        // Add airlock
+        const airlock = {
+            x: 0,
+            y: 0,
+            width: 40,
+            height: 60
+        };
+
+        function randomizeAirlockPosition() {
+            const positions = [
+                {x: 0, y: 0},
+                {x: canvas.width - airlock.width, y: 0},
+                {x: 0, y: canvas.height - airlock.height},
+                {x: canvas.width - airlock.width, y: canvas.height - airlock.height}
+            ];
+            const position = positions[Math.floor(Math.random() * positions.length)];
+            airlock.x = position.x;
+            airlock.y = position.y;
+        }
+
+        function createOxygenTank() {
+            return {
+                x: Math.random() * (canvas.width - 20) + 10,
+                y: Math.random() * (canvas.height - 20) + 10,
+                width: 15,
+                height: 25
+            };
+        }
+
+        function drawSplashScreen() {
+            drawStarfield();
+            
+            ctx.fillStyle = 'white';
+            ctx.font = 'bold 30px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('2001: A Space Parody', canvas.width / 2, canvas.height / 2 - 60);
+            
+            ctx.font = '16px Arial';
+            ctx.fillText('Use arrow keys to move Dave', canvas.width / 2, canvas.height / 2 - 20);
+            ctx.fillText('Collect oxygen to survive', canvas.width / 2, canvas.height / 2 + 10);
+            ctx.fillText('Avoid HAL', canvas.width / 2, canvas.height / 2 + 40);
+            ctx.fillText('Reach the escape pod to win', canvas.width / 2, canvas.height / 2 + 70);
+
+            startButton.style.display = 'block';
+        }
+
+        function startGame() {
+            gameState = 'playing';
+            startButton.style.display = 'none';
+            score = 0;
+            oxygenLevel = 3000;
+            gameOver = false;
+            dave.x = 200;
+            dave.y = 200;
+            hal.x = 100;
+            hal.y = 100;
+            hal.speed = 0.1;
+            oxygenTanks.length = 0;
+            randomizeAirlockPosition();
+            backgroundMusic.play();
+            update();
+        }
+
+        function drawStarfield() {
+            ctx.fillStyle = 'black';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            stars.forEach(star => {
+                ctx.fillStyle = `rgba(255, 255, 255, ${star.alpha})`;
+                ctx.beginPath();
+                ctx.arc(star.x, star.y, star.radius, 0, Math.PI * 2);
+                ctx.fill();
+            });
+        }
+
+        function drawDave(x, y) {
+            ctx.fillStyle = 'white';
+            ctx.fillRect(x, y, dave.width, dave.height);
+            ctx.fillStyle = 'black';
+            ctx.fillRect(x + 5, y + 5, 10, 10);
+        }
+
+        function drawHal(x, y) {
+            ctx.fillStyle = 'black';
+            ctx.beginPath();
+            ctx.arc(x, y, hal.radius, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = 'red';
+            ctx.beginPath();
+            ctx.arc(x, y, hal.radius - 3, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        function drawOxygenTank(x, y) {
+            ctx.fillStyle = 'cyan';
+            ctx.fillRect(x, y, 15, 25);
+            ctx.fillStyle = 'white';
+            ctx.fillRect(x + 3, y + 3, 9, 19);
+        }
+
+        function drawAirlock() {
+            ctx.fillStyle = 'gray';
+            ctx.fillRect(airlock.x, airlock.y, airlock.width, airlock.height);
+            ctx.fillStyle = 'darkgray';
+            ctx.fillRect(airlock.x + 5, airlock.y + 5, airlock.width - 10, airlock.height - 10);
+        }
+
+        function drawScore() {
+            ctx.fillStyle = 'white';
+            ctx.font = '16px Arial';
+            ctx.textAlign = 'left';
+            ctx.fillText('Score: ' + score, 10, 20);
+            ctx.fillText('Oxygen: ' + Math.round(oxygenLevel), 10, 40);
+        }
+
+        function checkCollision(obj1, obj2) {
+            return obj1.x < obj2.x + obj2.width &&
+                   obj1.x + obj1.width > obj2.x &&
+                   obj1.y < obj2.y + obj2.height &&
+                   obj1.y + obj1.height > obj2.y;
+        }
+
+        function moveHal() {
+            hal.x += hal.speed * hal.dx;
+            hal.y += hal.speed * hal.dy;
+
+            // Bounce off walls
+            if (hal.x - hal.radius < 0 || hal.x + hal.radius > canvas.width) hal.dx *= -1;
+            if (hal.y - hal.radius < 0 || hal.y + hal.radius > canvas.height) hal.dy *= -1;
+
+            // Bounce off oxygen tanks
+            for (let tank of oxygenTanks) {
+                if (checkCollision({x: hal.x - hal.radius, y: hal.y - hal.radius, width: hal.radius * 2, height: hal.radius * 2}, tank)) {
+                    // Determine which side HAL hit and reverse the appropriate direction
+                    if (Math.abs((hal.x - tank.x) / tank.width) > Math.abs((hal.y - tank.y) / tank.height)) {
+                        hal.dx *= -1;
+                    } else {
+                        hal.dy *= -1;
+                    }
+                    break;
+                }
+            }
+        }
+
+        function update() {
+            if (gameState === 'splash') {
+                drawSplashScreen();
+                requestAnimationFrame(update);
+                return;
+            }
+
+            if (gameState === 'gameOver') {
+                startButton.style.display = 'block';
+                startButton.textContent = 'Play Again';
+                backgroundMusic.pause();
+                backgroundMusic.currentTime = 0;
+                return;
+            }
+
+            drawStarfield();
+            drawAirlock();
+
+            drawDave(dave.x, dave.y);
+            drawHal(hal.x, hal.y);
+
+            moveHal();
+
+            // Gradually increase HAL's speed
+            if (hal.speed < hal.maxSpeed) {
+                hal.speed += 0.00005;
+            }
+
+            if (Math.random() < 0.02 && oxygenTanks.length < 5) {
+                oxygenTanks.push(createOxygenTank());
+            }
+
+            for (let i = oxygenTanks.length - 1; i >= 0; i--) {
+                const tank = oxygenTanks[i];
+                drawOxygenTank(tank.x, tank.y);
+
+                if (checkCollision(dave, tank)) {
+                    oxygenTanks.splice(i, 1);
+                    score += 10;
+                    oxygenLevel = Math.min(oxygenLevel + 500, 3000);
+                }
+            }
+
+            if (checkCollision(dave, {x: hal.x - hal.radius, y: hal.y - hal.radius, width: hal.radius * 2, height: hal.radius * 2})) {
+                gameState = 'gameOver';
+                ctx.fillStyle = 'white';
+                ctx.font = '20px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText("I'm sorry Dave, I'm afraid I can't do that", canvas.width / 2, canvas.height / 2);
+                ctx.fillText("Final Score: " + score, canvas.width / 2, canvas.height / 2 + 30);
+                return;
+            }
+
+            // Check if Dave reached the airlock
+            if (checkCollision(dave, airlock)) {
+                gameState = 'gameOver';
+                ctx.fillStyle = 'white';
+                ctx.font = '20px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText("Dave has escaped! Mission accomplished", canvas.width / 2, canvas.height / 2);
+                ctx.fillText("Final Score: " + score, canvas.width / 2, canvas.height / 2 + 30);
+                return;
+            }
+
+            // Decrease oxygen level
+            oxygenLevel -= 1;
+            if (oxygenLevel <= 0) {
+                gameState = 'gameOver';
+                ctx.fillStyle = 'white';
+                ctx.font = '20px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText("Dave ran out of oxygen!", canvas.width / 2, canvas.height / 2);
+                ctx.fillText("Final Score: " + score, canvas.width / 2, canvas.height / 2 + 30);
+                return;
+            }
+
+            drawScore();
+            score++;
+            requestAnimationFrame(update);
+        }
+
+        document.addEventListener('keydown', (e) => {
+            if (gameState !== 'playing') return;
+            switch (e.key) {
+                case 'ArrowLeft':
+                    if (dave.x > 0) dave.x -= dave.speed;
+                    break;
+                case 'ArrowRight':
+                    if (dave.x < canvas.width - dave.width) dave.x += dave.speed;
+                    break;
+                case 'ArrowUp':
+                    if (dave.y > 0) dave.y -= dave.speed;
+                    break;
+                case 'ArrowDown':
+                    if (dave.y < canvas.height - dave.height) dave.y += dave.speed;
+                    break;
+            }
+        });
+
+        startButton.addEventListener('click', startGame);
+
+        update();
+    </script>
+</body>
+</html>
